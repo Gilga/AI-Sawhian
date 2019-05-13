@@ -1,5 +1,6 @@
 using Distributed
-addprocs(4) # total: procs + main proc
+AI_THREADS = haskey(ENV, "AI_THREADS") ? parse(Int64, ENV["AI_THREADS"]) : 1
+if AI_THREADS > 1 addprocs(AI_THREADS) end # total: procs + main proc
 @info "Start $(nprocs()) processes"
 
 @everywhere begin
@@ -80,9 +81,9 @@ sendProcResult(value) = for p in workers() if p != proc_messenger() remote_do(se
 @everywhere function waitForRestart()
   global RestartCounter
   remote_do(procFinish, 1, myid())
-  while !getProcResult() yield() end #wait until counter reached max
+  while !getProcResult() sleep(1) end #wait until counter reached max
   if myid() != proc_reloader()
-    while getProcResult() yield() end #wait until counter resets
+    while getProcResult() sleep(1) end #wait until counter resets
   else
     sleep(0.1)
     sendProcResult(true)

@@ -7,3 +7,8 @@ lib/
 *.log
 *.jar
 *.dll
+*.lnk
+*.jld2
+
+docs/build/
+docs/src/files/
