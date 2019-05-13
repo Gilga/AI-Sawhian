@@ -1,3 +1,5 @@
+const ROOT = joinpath(@__DIR__,"../")
+
 const Position = NamedTuple{(:x, :y),Tuple{Int,Int}}
 
 import Base.+, Base.-, Base.*, Base./

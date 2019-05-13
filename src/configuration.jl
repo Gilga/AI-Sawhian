@@ -2,9 +2,9 @@
 random_bitstring() = bitstring(UInt8(rand(range(0,stop=typemax(UInt8)))))
 
 zobrist_table = String[]
-zobrist_file = "zobrist_table.jld2"
+zobrist_file = joinpath(ROOT, "zobrist_table.jld2")
 zobrist_hashmap = Dict{String, UInt32}()
-zobrist_hashmap_file = "zobrist_hashmap.jld2"
+zobrist_hashmap_file = joinpath(ROOT, "zobrist_hashmap.jld2")
 
 function init_zobrist(size::Tuple; is_main_process=true)
   global zobrist_table, zobrist_file

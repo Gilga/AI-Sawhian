@@ -36,8 +36,8 @@ module Client
   getName() = string("$name($pid)[$(getColor())]")
 
   convertToValidName() = replace(removeColors(colorNames[getID()]),r"[\\\\/:*?\"<>|]"=>"_")
-  getErrorLogFile() = "error_$(convertToValidName()).log"
-  getLogFile() = "out_$(convertToValidName()).log"
+  getErrorLogFile() = joinpath(ROOT, "error_$(convertToValidName()).log")
+  getLogFile() = joinpath(ROOT, "out_$(convertToValidName()).log")
 
   outputBacktrace(ex) = open(getErrorLogFile(),"w+") do f Base.showerror(f, ex, catch_backtrace()) end
 
@@ -229,7 +229,7 @@ module Client
   end
 
   function getMove(player::Player)
-    filds = getValidMoves(player)
+    fields = getValidMoves(player)
     if length(fields)<=0 throw(RuntimeException("No moves found for p$player")) end
     field = rand(fields)
     move = Move(player,field)
@@ -272,7 +272,7 @@ module Client
     global client
 
     try
-      image = Images.load("logo.png")
+      image = Images.load(joinpath(ROOT, "logo.png"))
     catch ex
       warn("Could not load image: $ex")
       info("use default blank image instead")
@@ -293,8 +293,7 @@ module Client
       )
 
       reset() # reset board etc...
-      closeClient(client)
-      return
+      #closeClient(client); return
 
       while true
         move = receiveMove(client)
