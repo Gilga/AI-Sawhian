@@ -9,24 +9,29 @@ module Client
   #open(stdout -> println(stdout, args...), LOGGER_OUT, "a+")
 
   include("constants.jl")
-  include("configuration.jl")
-  include("gameTree.jl")
 
-  pid = 0
-  playerNumber = 0
+  # variables
+  pid = 0 # process id
+  playerNumber = 1
   name = nothing
   image  = nothing
   server = nothing
   client = NetworkClient()
   initalized = false
   output=Base.println
+  board = FieldType[]
+  const playerDirection=Position[(x=0,y=1),(x=1,y=0),(x=0,y=-1),(x=-1,y=0)]
+  board_indicies=Position[]
+  stonesOnStack=Int[]
+  hashMap = Dict{String, UInt32}()
+  USE_SERVER = false
+  KickedPlayer = [0,0,0,0]
+  timeLimitInSeconds = 4
 
   """
   should use some PPP
   """
   setOutput(poutput) = global output = poutput
-
-  removeColors(str) = begin for c in COLORS occursin(c, str) ? str=replace(str, c => "") : nothing end; str end
 
   convertToValidInput(move::Move) = Move(move.player+1,move.pos+1)
   convertToValidOutput(move::Move) = Move(move.player-1,move.pos-1)
@@ -35,7 +40,7 @@ module Client
   getColor() = colorNames[getID()]
   getName() = string("$name($pid)[$(getColor())]")
 
-  convertToValidName() = replace(removeColors(colorNames[getID()]),r"[\\\\/:*?\"<>|]"=>"_")
+  convertToValidName() = replace(cleanColorNames[getID()],r"[\\\\/:*?\"<>|]"=>"_")
   getErrorLogFile() = joinpath(ROOT, "error_$(convertToValidName()).log")
   getLogFile() = joinpath(ROOT, "out_$(convertToValidName()).log")
 
@@ -57,17 +62,10 @@ module Client
     if initalized open(getLogFile(),wmode) do f write(f, whead*msg*"\n") end; end
   end
 
-  error(msg) = log("Error",msg)
-  warn(msg) = log("Warning",msg)
-  info(msg) = log("Info",msg)
-  println(msg) = log(msg)
-
-  board = FieldType[]
-  const playerDirection=Position[(x=0,y=1),(x=1,y=0),(x=0,y=-1),(x=-1,y=0)]
-  board_indicies=Position[]
-  stonesOnStack=Int[]
-  points=0 # for rating
-  hashMap = Dict{String, UInt32}()
+  error(msg::String) = log(msg; mode="Error")
+  warn(msg::String) = log(msg; mode="Warning")
+  info(msg::String) = log(msg; mode="Info")
+  println(msg::String) = log(msg)
 
   @enum FIELD_RESULT FIELD_INVALID=-1 FIELD_START FIELD_FREE FIELD_OUTSIDE
 
@@ -90,7 +88,9 @@ module Client
     isValid(pos) ? board[pos.y,pos.x] :
     throw(RuntimeException("one element of $pos not in range of FIELDS_RANGE"))
 
-  setFieldValue(pos::Position, value::FieldType ;board=board) =
+  setFieldValue(mv::Move; board=board) = setFieldValue(mv.pos, mv.player; board=board)
+
+  setFieldValue(pos::Position, value::FieldType; board=board) =
     isValid(pos) ? (board[pos.y,pos.x] = value) :
     throw(RuntimeException("one element of $pos not in range of FIELDS_RANGE"))
 
@@ -114,7 +114,8 @@ module Client
 
   hasFreeStartFields(fields::Fields) = length(fields) > 0
 
-  clearField(pos::Position) = setFieldValue(pos,nothing)
+  clearField(mv::Move) = setFieldValue(mv.pos,nothing)
+
   const setPlayer = setFieldValue
   const getPlayer = getFieldValue
 
@@ -159,59 +160,6 @@ module Client
     println("Added new stone on $move")
   end
 
-  function updateMove(move::Move)
-    global points
-    result=true
-    (status, new_pos) = getNextField(move)
-
-    if status == FIELD_OUTSIDE # is outside
-      println("win point")
-      clearField(move.pos)
-      points += 1
-
-    elseif status == FIELD_FREE
-      if move.pos == new_pos  throw(RuntimeException("Move did not change: $move")) end
-      println("set pos")
-      clearField(move.pos)
-      setPlayer(new_pos,move.player)
-
-    elseif status == FIELD_START
-      if !isValidFreeStartField(move) throw(RuntimeException("Start move is not valid: $move")) end
-      addStone(move)
-
-    else #status == FIELD_INVALID
-      throw(RuntimeException("Cannot update move: $move"))
-      result=false # cannot update move
-    end
-
-    if result printBoard() end
-
-    result
-  end
-
-#=
-  function getStone(move::Move) # first(filter((x)->x==move.player,board[:,move.pos.x]))
-    if isOutside(move.pos) return throw(RuntimeException("Move is outside of board: $move")) end
-    player = getPlayer(move.pos)
-    if player != 0 && move.player != player return throw(RuntimeException("Player not found on board: $move")) end # saved wrong player?
-    #getField(move.pos;board=board_indicies)
-    getFieldIndex(move.pos)
-  end
-
-  function updateStone(move::Move; is_start=false)
-    if !isOutside(move.pos) return false end #is not on board
-
-    if !is_start #is not start?
-      pos = getStone(move)
-      if pos == nothing return false end #invalid pos
-      setField(pos,nothing) #remove
-    end
-
-    setField(move.pos,move.player)
-    true
-  end
-=#
-
   getStones(player::Player) = filter(x->getFieldValue(x) == player, board_indicies)
   getMoveableStones(player::Player) = filter(x->getNextField(Move(player,x))[1] != FIELD_INVALID, getStones(player))
 
@@ -228,12 +176,62 @@ module Client
     fields
   end
 
+  getAllValidMoves() = (player->getValidMoves(player)).(PLAYERINDEX)
+  countOfAllValidMoves() = (fields->length(fields)).(getAllValidMoves())
+
+  checkPlayers() = USE_SERVER ? true : reduce(+,KickedPlayer) < 4
+
+  function getNextPlayer()
+    global playerNumber
+    # circle through id
+    playerNumber+=1
+    if playerNumber >= 5 playerNumber=1 end
+  end
+
+  updateMove(move::Move) = nothing # pre definition
+
+  #################################
+
+  # some more includes
+  include("configuration.jl")
+  include("gameTree.jl")
+  include("evaluation.jl")
+
+  #################################
+  #Base.println("dfd")
+  #  zobrist_init()
+
+  function getRandomMove(player::Player, fields::AbstractArray)
+    field = rand(fields)
+    move = Move(player,field)
+  end
+
   function getMove(player::Player)
     fields = getValidMoves(player)
     if length(fields)<=0 throw(RuntimeException("No moves found for p$player")) end
-    field = rand(fields)
-    move = Move(player,field)
+
+    move = RANDOM_MOVES ? getRandomMove(player, fields) :
+    getBestMoveBySearch(player).move # see gameTree.jl
+
     println("getMove: "*string(getNextField(move)))
+    move
+  end
+
+  function getMoveSafe(id)
+    move = nothing
+    try
+      move = getMove(id)
+    catch e
+      warn(string(e))
+    end
+    move
+  end
+
+  function getPlayeMoveFast()
+    move = getMoveSafe(getID())
+    if move == nothing KickedPlayer[getID()]=1 end
+    # circle through id
+    getNextPlayer()
     move
   end
 
@@ -250,17 +248,90 @@ module Client
   end
 
   function reset()
+    global KickedPlayer = [0,0,0,0]
     global board=fill!(Array{FieldType}(undef,7,7),nothing)
     global board_indicies=getPosition.(reshape(collect(1:MAX_FIELDS_COUNT),(FIELDS_RANGE.y,FIELDS_RANGE.y)))
     global stonesOnStack=fill!(Array{Int}(undef,MAX_PLAYER_COUNT),MAX_STONES_COUNT)
-    global points=0 # for rating
-    init_zobrist((MAX_FIELDS_COUNT,MAX_PLAYER_COUNT);is_main_process=pid==1) # see configuration.jl
+
+    is_main_process=pid==1
+    zobrist_init(is_main_process) # see configuration.jl
+  end
+
+  redirect_NetworkClient(server, name, image) =
+    USE_SERVER ? sawhian.NetworkClient(server, name, image) : nothing
+
+  redirect_getMyPlayerNumber(client) =
+    USE_SERVER ? sawhian.getMyPlayerNumber(client) : getID()-1
+
+  redirect_getTimeLimitInSeconds(client) =
+    USE_SERVER ? sawhian.getTimeLimitInSeconds(client) : 4
+
+  redirect_getExpectedNetworkLatencyInMilliseconds(client) =
+    USE_SERVER ? sawhian.getExpectedNetworkLatencyInMilliseconds(client) : 0
+
+  redirect_closeClient(client) =
+    USE_SERVER ? sawhian.closeClient(client) : nothing
+
+  function redirect_receiveMove(client)
+    if !USE_SERVER
+      move = getPlayeMoveFast()
+      println("Receive $(move != nothing ? move : "nothing")")
+    else
+      move = sawhian.receiveMove(client)
+      if move != nothing
+        move = convertToValidInput(move)
+        println("Receive $move")
+        if move.player == getID() println("is my move!") end
+      end
+    end
+    move
+  end
+
+  function redirect_sendMove(client, move)
+    println("Send $move")
+    USE_SERVER ? sawhian.sendMove(client, move) : nothing
+  end
+
+  function updateMove(move::Move)
+    result=true
+
+    (status, new_pos) = getNextField(move)
+
+    if status == FIELD_OUTSIDE # is outside
+      println("win point")
+      clearField(move)
+      if !RANDOM_MOVES zobrist_updateHashKey(move) end # see configuration.jl
+
+    elseif status == FIELD_FREE
+      nextMove = Move(move.player,new_pos)
+      if move.pos == nextMove.pos  throw(RuntimeException("Move did not change: $move")) end
+      println("set pos")
+      clearField(move)
+      setPlayer(nextMove)
+      if !RANDOM_MOVES zobrist_updateHashKey(move) end #remove old - see configuration.jl
+      if !RANDOM_MOVES zobrist_updateHashKey(nextMove) end #add new old - see configuration.jl
+
+    elseif status == FIELD_START
+      if !isValidFreeStartField(move) throw(RuntimeException("Start move is not valid: $move")) end
+      addStone(move)
+      if !RANDOM_MOVES zobrist_updateHashKey(move) end # see configuration.jl
+
+    else #status == FIELD_INVALID
+      throw(RuntimeException("Cannot update move: $move"))
+      result=false # cannot update move
+    end
+
+    if result printBoard() end
+
+    result
   end
 
   function main(args::Array{String,1} ;output=Base.println)
-    global initalized
+    global playerNumber, timeLimitInSeconds, initalized
+
     len = length(args)
-    if len == 0 return end
+    if len == 0 throw(RuntimeException("No PID set!")) end # no pid? -> leave
+
     initalized = false
 
     setOutput(Base.println)
@@ -280,52 +351,47 @@ module Client
     end
 
     try
-      client = NetworkClient(server, name, image)
-      global playerNumber = getMyPlayerNumber(client)+1
+      client = redirect_NetworkClient(server, name, image)
+      playerNumber = 1
+      playerNumber = redirect_getMyPlayerNumber(client)+1
+      timeLimitInSeconds = redirect_getTimeLimitInSeconds(client)
+      expectedNetworkLatencyInMilliseconds = redirect_getExpectedNetworkLatencyInMilliseconds(client)
       initalized = true
       clearLogFiles()
 
       output(
       getColor()*":\n"*
-      "My Number: $(getMyPlayerNumber(client)); "*
-      "Time Limit: $(getTimeLimitInSeconds(client)); "*
-      "Latency: $(getExpectedNetworkLatencyInMilliseconds(client))"
+      "My Number: $(playerNumber); "*
+      "Time Limit: $(timeLimitInSeconds); "*
+      "Latency: $(expectedNetworkLatencyInMilliseconds)"
       )
 
       reset() # reset board etc...
       #closeClient(client); return
 
-      while true
-        move = receiveMove(client)
+      while checkPlayers()
+        move = redirect_receiveMove(client)
 
         if move == nothing #my turn
+          if !USE_SERVER continue end #skip because its invalid
           move = getMove(getID())
-          println("Send $move")
-          sendMove(client, convertToValidOutput(move))
+          redirect_sendMove(client, convertToValidOutput(move))
         else
-          move = convertToValidInput(move)
-          println("Receive $move")
-          if move.player == getID()
-            println("is my move!")
-          end
           updateMove(move)
-          #player = getPlayer(move)
-          #if playerIsAlive(player)
-          #  update(player, move)
-          #  getNextPlayer()
-          #else
-          #  warn("all players left the game")
-          #  break
-          #end
         end
       end
+
+      warn("all players left the game")
 
     catch ex
       outputBacktrace(ex)
       error("NetworkClient error! For more details look in $(getErrorLogFile())")
     end
 
-    closeClient(client)
+    redirect_closeClient(client)
+
+    # evaluation
+    if !USE_SERVER && !RANDOM_MOVES evaluate(getID()) else evaluate() end  # see evaluation.jl
   end
 
 end #Client

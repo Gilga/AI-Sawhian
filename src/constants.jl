@@ -1,6 +1,8 @@
 const ROOT = joinpath(@__DIR__,"../")
 
 const Position = NamedTuple{(:x, :y),Tuple{Int,Int}}
+const Configuration = NamedTuple{(:board, :stack, :validMoves, :weights, :weighting, :time),Tuple{AbstractArray,AbstractArray,AbstractArray, AbstractArray, AbstractArray, Float32}}
+const ConfigurationKey = Int
 
 import Base.+, Base.-, Base.*, Base./
 
@@ -17,6 +19,7 @@ import Base.+, Base.-, Base.*, Base./
 const Player = Int
 const Stone = Int
 const Field = Int
+const Weight = Int
 const Board = AbstractArray
 const Fields = AbstractArray
 const FieldType = Union{Nothing,String,Int}
@@ -25,6 +28,16 @@ const MAX_STONES_COUNT = 7
 const FIELDS_RANGE = (x=1,y=7)
 const MAX_FIELDS_COUNT = FIELDS_RANGE.y*FIELDS_RANGE.y
 const PLAYERINDEX = collect(range(1,stop=MAX_PLAYER_COUNT))
+const RANDOM_MOVES = true
+const ∞ = Inf
+
+WEIGHT_MULTIPLYER_BOARD = 1
+WEIGHT_MULTIPLYER_STACK = 1
+WEIGHT_MULTIPLYER_WINPOINT = 10
+WEIGHT_MULTIPLYER_BLOCKED = 10
+
+CUTOFF_WIN = MAX_STONES_COUNT * WEIGHT_MULTIPLYER_WINPOINT
+CUTOFF_LOOSE = -MAX_STONES_COUNT * WEIGHT_MULTIPLYER_BLOCKED
 
 const COLORS = (
   reset = "\x1b[39m\x1b[49m"
@@ -55,3 +68,6 @@ const colorNames = [
 ]
 
 RuntimeException(msg::String) = ErrorException(msg)
+removeColors(str) = begin for c in COLORS occursin(c, str) ? str=replace(str, c => "") : nothing end; str end
+
+const cleanColorNames = (name->removeColors(name)).(colorNames)

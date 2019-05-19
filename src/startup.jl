@@ -9,11 +9,15 @@ if AI_THREADS > 1 addprocs(AI_THREADS) end # total: procs + main proc
   proc_reloader() = 1 #first(procs())
   proc_messenger() = nprocs() #last(procs())
 
-  if myid() != proc_messenger()
-    pushMsg!(msg::String) = remote_do(pushMsg!, proc_messenger(), "P"*string(myid())*": "*msg)
+  if AI_THREADS > 1
+    if myid() != proc_messenger()
+      pushMsg!(msg::String) = remote_do(pushMsg!, proc_messenger(), "P"*string(myid())*": "*msg)
+    else
+      global MessageChannel = Channel{String}(Inf)
+      pushMsg!(msg::String) = put!(MessageChannel, msg)
+    end
   else
-    global MessageChannel = Channel{String}(Inf)
-    pushMsg!(msg::String) = put!(MessageChannel, msg)
+    pushMsg! = Base.println
   end
 
   # add current path
@@ -51,7 +55,7 @@ function revise()
   catch ex
     exception=ex
   end
-  put!(ReviseChannel, exception)
+  if AI_THREADS > 1 put!(ReviseChannel, exception) end
 end
 
 function waitForRevise()
@@ -79,21 +83,26 @@ getProcResult() = length(RestartCounter) >= nprocs()-1
 sendProcResult(value) = for p in workers() if p != proc_messenger() remote_do(setProcResult, p, value) end end
 
 @everywhere function waitForRestart()
-  global RestartCounter
-  remote_do(procFinish, 1, myid())
-  while !getProcResult() sleep(1) end #wait until counter reached max
-  if myid() != proc_reloader()
-    while getProcResult() sleep(1) end #wait until counter resets
+  if AI_THREADS > 1
+    remote_do(procFinish, 1, myid())
+    while !getProcResult() sleep(1) end #wait until counter reached max
+
+    if myid() != proc_reloader()
+      while getProcResult() sleep(1) end #wait until counter resets
+    else
+      sleep(0.1)
+      sendProcResult(true)
+      print("\nPress enter to restart...")
+      input = readline()
+    end
   else
-    sleep(0.1)
-    sendProcResult(true)
     print("\nPress enter to restart...")
     input = readline()
   end
 end
 
 @everywhere begin
-  if myid() == proc_messenger()
+  if AI_THREADS > 1 && myid() == proc_messenger()
     #Messages = String[]
     #@async while true
     #  push!(Messages, take!(MessageChannel))
@@ -111,16 +120,19 @@ end
         Client.main(ARGS ;output=pushMsg!)
       catch ex
         pushMsg!("Error: script fails on run: $ex")
+        open("../errors[$(myid())].log","w+") do f Base.showerror(f, ex, catch_backtrace()) end
       end
       waitForRestart()
-      if myid() == proc_reloader()
+      if AI_THREADS == 1 || myid() == proc_reloader()
         println("Reload Script...")
         @async revise()
-        waitForRevise()
-        resetCounter()
+        if AI_THREADS > 1
+          waitForRevise()
+          resetCounter()
+        end
         #println(repeat('\n',100)) # clear console
         println("\33[2J") # clear console: https://rosettacode.org/wiki/Terminal_control/Clear_the_screen#Julia
-        sendProcResult(false)
+        if AI_THREADS > 1 sendProcResult(false) end
       end
     end
   end
