@@ -5,10 +5,6 @@
 # sawhian
 Study Project: AI Game Client written in Julia
 
-## TODOS
-* Game Tree with configurations
-* Alpha beta search algorithm
-
 ## Documentation
 not yet
 

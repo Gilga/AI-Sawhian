@@ -2,7 +2,8 @@
 
 PROJECT = ARGS[1]
 AUTHORS = ARGS[2]
-PRETTYURLS = length(ARGS)>=3 ? ARGS[3] == "true" : false
+GITHUP_REPO = ARGS[3] #https://github.com/(User)/(Project)
+PRETTYURLS = length(ARGS)>=4 ? ARGS[4] == "true" : false
 
 # required
 using Pkg
@@ -51,10 +52,6 @@ if !isdir(docs_manuals) mkdir(docs_manuals) end
 pkgs = (x->(x,false)).(readlines(joinpath(root,"REQUIRE")))
 push!(pkgs, ("Documenter",true)) # add Documenter
 if install_pkgs(pkgs) Pkg.update() end
-
-# include package
-@info "Include custom packages..."
-install_pkgs((x->(x,true)).(["sawhian", "Client"]);extern=false)
 
 # read files
 @info "Create md files..."
@@ -124,6 +121,10 @@ for (root, dirs, files) in walkdir(source)
     end
 end
 
+# include package
+@info "Include custom packages..."
+install_pkgs((x->(x,true)).(md_modules);extern=false)
+
 # create docs
 @info "Create docs..."
 makedocs(
@@ -139,7 +140,7 @@ makedocs(
   format    = Documenter.HTML(prettyurls = PRETTYURLS),
   sitename  = PROJECT,
   authors   = AUTHORS,
-  #html_canonical = "https://github.com/Gilga/AI-Sawhian",
+  #html_canonical = GITHUP_REPO,
   pages = Any[ # Compat: `Any` for 0.4 compat
       "Home" => "index.md",
       "Manual" => md_manuals,
@@ -147,16 +148,5 @@ makedocs(
       "Source Files" => md_source_files,
   ],
 )
-
-#=
-# deploy docs
-@info "Deploy docs..."
-deploydocs(
-  deps   = Deps.pip("mkdocs", "python-markdown-math"), #, "curl"
-  repo = "https://github.com/Gilga/AI-Sawhian",
-  branch = "gh-pages",
-  julia  = "1.1.0",
-)
-=#
 
 @info "Creating Docs finished."

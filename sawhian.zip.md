@@ -1,7 +1,7 @@
-# sawhian.zip
-You need sawhian.zip from HTW Moodle class GT1(PÜ) AI for Games and Interactive Systems (PÜ) - SoSe2019
+# Get Permission first
+**sawhian.zip** is from Moodle class **GT1(PÜ) AI for Games and Interactive Systems (PÜ) - SoSe2019** at **HTW** (Hochschule für Technik und Wirtschaft) in **Berlin, Germany**
 
-# TODO
-get permision for upload of sawhian.zip
+Please get permission first from **Prof. Dr. Lenz, Tobias** for using **sawhian.zip**
 
-
+# LICENCE
+[LICENSE_sawhian](LICENSE_sawhian)
