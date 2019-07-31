@@ -21,9 +21,6 @@ Study Project 1 (Turn-based Board Game): AI Game Client written in Julia
 * Alpha beta game tree for four players
 * Learning algorithm to improve the evaluation function
 
-## Documentation
-not yet
-
 ## Requirements
 * Julia 1.1 or higher [download here](https://julialang.org/)
 * Julia Packages See [REQUIRE](REQUIRE)
